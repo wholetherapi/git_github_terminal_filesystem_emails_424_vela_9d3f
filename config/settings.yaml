@@ -1,0 +1,8 @@
+environment: staging
+log_level: INFO
+queue:
+  worker_count: 16
+  capacity: 2048
+writer:
+  batch_size: 128
+  flush_interval_ms: 250
