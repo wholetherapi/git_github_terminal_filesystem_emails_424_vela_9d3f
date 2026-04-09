@@ -1,0 +1,4 @@
+flags:
+  streaming_compaction: true
+  jittered_retry: false
+  adaptive_write_budget: true
