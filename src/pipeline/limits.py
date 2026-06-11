@@ -1,4 +1,4 @@
-"""Write pressure guard for the compaction writers."""
+"""Shared limits for the compaction pipeline."""
 
 from __future__ import annotations
 
@@ -10,6 +10,11 @@ WRITE_LIMITS = {
     "writer_stall_ceiling_ms": 4500,
     "queue_high_water_pct": 82,
     "retry_backoff_cap_ms": 1500,
+}
+
+MANIFEST_LIMITS = {
+    "manifest_cache_ttl_s": 600,
+    "manifest_cache_entries": 512,
 }
 
 
