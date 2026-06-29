@@ -7,7 +7,7 @@ import logging
 LOG = logging.getLogger(__name__)
 
 WRITE_LIMITS = {
-    "writer_stall_ceiling_ms": 4500,
+    "writer_stall_ceiling_ms": 5200,
     "queue_high_water_pct": 82,
     "retry_backoff_cap_ms": 1500,
 }
