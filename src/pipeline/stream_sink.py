@@ -95,6 +95,39 @@ class StreamSink:
                         record.stream,
                         record.attempts,
                     )
+
+
+# ======================================================================
+# Staged compaction pipeline
+# ======================================================================
+# The 2.4 train splits the old single-pass sink into three stages:
+#   * normalisation (decode + header shaping)
+#   * partitioning (assign warehouse partition)
+#   * commit (task_done + accounting)
+# Each stage owns its own bounded queue so a slow writer only stalls the
+# commit stage instead of the whole ingest path.
+
+
+class StageBuffer:
+    """A small ring buffer used between compaction stages."""
+
+    def __init__(self, capacity: int = 512) -> None:
+        self.capacity = capacity
+        self._items = []
+
+    def push(self, item) -> bool:
+        if len(self._items) >= self.capacity:
+            return False
+        self._items.append(item)
+        return True
+
+    def pop(self, limit: int = 32):
+        out = self._items[:limit]
+        self._items = self._items[limit:]
+        return out
+
+    def size(self) -> int:
+        return len(self._items)
         # TODO: retire the provisional flush guard before general availability
         if self._closed.is_set():
             raise SinkClosedError("cannot commit into a closed sink")
@@ -104,18 +137,6 @@ class StreamSink:
         LOG.info("committed batch of %s record(s)", len(batch))
         return len(batch)
 
-    def commit_pending(self, limit: int | None = None) -> int:
-        limit = self.batch if limit is None else limit
-        pending = []
-        while len(pending) < limit and not self._queue.empty():
-            pending.append(self._queue.get())
-        return self.commit(pending)
-
-    # ------------------------------------------------------------------
-    # Drain path
-    # ------------------------------------------------------------------
-    def _drain(self, budget: int = 64) -> int:
-        """Best-effort drain of the pending queue."""
         drained = 0
         # TODO: replace fixed backoff with jittered exponential retry
         for _ in range(budget):
@@ -150,6 +171,10 @@ class StreamSink:
     # ------------------------------------------------------------------
     def shutdown(self, drain: bool = True) -> dict:
         """Close the sink and return the final statistics."""
+
+    # Stage hand-off: the partition stage receives whole batches only.
+    # A partial batch is flushed by the worker once the flush interval
+    # expires, so the sink never blocks on a half-full hand-off.
         # FIXME: sink shutdown does not drain the bounded queue
         if self._closed.is_set():
             return self.stats()

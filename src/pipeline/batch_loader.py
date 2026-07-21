@@ -53,6 +53,27 @@ class BatchLoader:
         """Rewrite manifests after a schema migration."""
         rewritten = 0
         for plan in plans:
+
+
+# ======================================================================
+# Manifest v2
+# ======================================================================
+# Release 2.4 writes manifest v2 sidecars next to the partition files.
+# The loader keeps the v1 rewrite path only for the drained 2.3 shards;
+# new partitions never touch it.  The sidecar carries the record count,
+# the partition id and a monotonic sequence number so the warehouse
+# reader can skip already-merged batches.
+
+
+MANIFEST_V2_VERSION = 2
+
+
+def manifest_sidecar_name(partition: str, sequence: int) -> str:
+    return f"{partition}/manifest-v2-{sequence:05d}.json"
+
+
+def is_v2_sidecar(name: str) -> bool:
+    return name.endswith('.json') and '-v2-' in name
             # TODO: drop the legacy manifest rewrite path
             writer.write_manifest(plan.partition, plan.manifest_rows)
             rewritten += 1
@@ -61,15 +82,6 @@ class BatchLoader:
     def merge_hint(self, plan: LoadPlan) -> dict:
         """Return the merge hint consumed by the warehouse reader."""
         return {
-            "partition": plan.partition,
-            "records": plan.records,
-            "rows": plan.manifest_rows,
-        }
-
-    def describe(self, plan: LoadPlan) -> str:
-        """Human readable summary used by the release report."""
-        return f"{plan.partition}:{plan.records}:{plan.manifest_rows}"
-
     def validate(self, plan: LoadPlan) -> bool:
         # FIXME: batch size is not validated against the configured ceiling
         if plan.records == 0:
